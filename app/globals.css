@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   AUTON HEALTH — DESIGN SYSTEM TOKENS
+   Replicados de apps/frontend/src/app/globals.css do monorepo Auton.
+   Mantém paridade visual com o produto principal.
+   ============================================================ */
+:root {
+  /* Brand */
+  --primary-color: #1e3a5f;
+  --primary-hover: #2d4a6f;
+  --primary-color-alpha: rgba(30, 58, 95, 0.25);
+  --accent-color: #1e3a5f;
+
+  /* Light mode (padrão da Oferta Guiada) */
+  --bg-primary: #EBF3F6;
+  --bg-secondary: #D6E8F0;
+  --card-bg: #FFFFFF;
+  --input-bg: #E6F1F6;
+  --border-color: #C4D9E5;
+  --hover-bg: #D6E8F0;
+
+  /* Texto */
+  --text-primary: #1A1A1A;
+  --text-secondary: #5B5B5B;
+  --text-tertiary: #7A7A7A;
+
+  /* Semantic & accent */
+  --error-color: #EF4444;
+  --cyan: #21E6D6;
+  --green: #65F6B1;
+  --blue: #4FA2FF;
+  --orange: #FFA447;
+  --amber: #FFD64D;
+  --lilac: #E8A8FF;
+
+  /* Radius */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Shadows */
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.18);
+}
+
+html, body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Animação suave de transição entre slides */
+@keyframes slideFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-enter {
+  animation: slideFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Scrollbar discreta no modal */
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
