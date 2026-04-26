@@ -22,6 +22,7 @@ import {
   DollarSign, Calculator, ListChecks, Shield, Sparkles, Network,
   Smartphone, Building2, GraduationCap, Stethoscope, FileText, Zap,
   Database, MessageSquare, Award, Lightbulb,
+  Search, Command, Hash, ArrowRight as ArrowRightIcon,
 } from "lucide-react";
 
 const C = {
@@ -269,10 +270,10 @@ function BulletList({ items, icon: Icon = CheckCircle2, color = C.primary }: { i
 // ============================================================
 
 const TABS = [
-  { id: "oferta", label: "Oferta v1.0", icon: Package, tagline: "Hormozi aplicado · oferta empacotada" },
-  { id: "mercado", label: "Mercado BR", icon: BarChart3, tagline: "Estudo de mercado · abril 2026" },
-  { id: "estrategia", label: "Estratégia", icon: Target, tagline: "Aplicação às decisões" },
-  { id: "canvas", label: "Lean Canvas", icon: Layout, tagline: "13 blocos validados" },
+  { id: "mercado", num: "1", label: "O Mercado Brasileiro", icon: BarChart3, tagline: "Estudo de mercado · abril 2026" },
+  { id: "estrategia", num: "2", label: "A Auton no Mercado", icon: Target, tagline: "Aplicação às decisões" },
+  { id: "canvas", num: "3", label: "Lean Canvas desmembrado", icon: Layout, tagline: "13 blocos validados" },
+  { id: "oferta", num: "4", label: "Ofertas", icon: Package, tagline: "Hormozi aplicado · oferta empacotada" },
 ];
 
 const SECTIONS_BY_TAB: Record<string, { id: string; label: string }[]> = {
@@ -325,12 +326,51 @@ const SECTIONS_BY_TAB: Record<string, { id: string; label: string }[]> = {
 // PAGE
 // ============================================================
 
+// Lista plana com TODAS as seções de TODOS os docs (busca global + atalhos)
+const FLAT_SECTIONS: { tab: string; tabNum: string; tabLabel: string; id: string; label: string }[] = TABS.flatMap(t =>
+  (SECTIONS_BY_TAB[t.id] || []).map(s => ({
+    tab: t.id, tabNum: t.num, tabLabel: t.label, id: s.id, label: s.label,
+  }))
+);
+
+const STORAGE_KEY = "auton-painel-visited-v1";
+
 export default function PainelPage() {
-  const [tab, setTab] = useState("oferta");
-  const [active, setActive] = useState(SECTIONS_BY_TAB.oferta[0].id);
-  const [navOpen, setNavOpen] = useState(false);
+  const [tab, setTab] = useState("mercado");
+  const [active, setActive] = useState(SECTIONS_BY_TAB.mercado[0].id);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [visited, setVisited] = useState<Set<string>>(new Set());
 
   const sections = SECTIONS_BY_TAB[tab];
+
+  // Carrega visitados do localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setVisited(new Set(JSON.parse(saved)));
+    } catch {}
+  }, []);
+
+  // Salva visitados
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visited)));
+    } catch {}
+  }, [visited]);
+
+  // Marca atual como visitado
+  useEffect(() => {
+    if (active) {
+      setVisited(prev => {
+        if (prev.has(active)) return prev;
+        const next = new Set(prev);
+        next.add(active);
+        return next;
+      });
+    }
+  }, [active]);
 
   useEffect(() => {
     setActive(sections[0]?.id || "");
@@ -352,75 +392,194 @@ export default function PainelPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [tab, sections]);
 
+  // Atalhos de teclado
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      // Cmd+K · Ctrl+K · "/" — abre palette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (!isTyping && e.key === "/") {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      // Esc fecha palette
+      if (e.key === "Escape" && paletteOpen) {
+        setPaletteOpen(false);
+        setPaletteQuery("");
+        return;
+      }
+      if (isTyping || paletteOpen) return;
+
+      // 1-4 muda doc
+      if (["1", "2", "3", "4"].includes(e.key)) {
+        const t = TABS[parseInt(e.key) - 1];
+        if (t) setTab(t.id);
+        return;
+      }
+      // J/K próxima/anterior
+      if (e.key.toLowerCase() === "j" || e.key.toLowerCase() === "k") {
+        const idx = sections.findIndex(s => s.id === active);
+        const dir = e.key.toLowerCase() === "j" ? 1 : -1;
+        const next = sections[idx + dir];
+        if (next) goToInTab(tab, next.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paletteOpen, active, sections, tab]);
+
   function goTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setNavOpen(false);
+    setMobileNavOpen(false);
   }
+
+  function goToInTab(targetTab: string, sectionId: string) {
+    if (targetTab === tab) {
+      goTo(sectionId);
+    } else {
+      setTab(targetTab);
+      // Aguarda render do novo tab
+      setTimeout(() => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+    setMobileNavOpen(false);
+    setPaletteOpen(false);
+    setPaletteQuery("");
+  }
+
+  // Resultados da busca
+  const paletteResults = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase();
+    if (!q) return FLAT_SECTIONS;
+    return FLAT_SECTIONS.filter(s =>
+      s.label.toLowerCase().includes(q) ||
+      s.tabLabel.toLowerCase().includes(q)
+    );
+  }, [paletteQuery]);
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: "100vh" }}>
       {/* HEADER */}
-      <header className="fixed top-0 inset-x-0 z-40 backdrop-blur-md border-b" style={{ background: "rgba(255,255,255,0.95)", borderColor: C.border }}>
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button className="md:hidden p-2 rounded-lg" onClick={() => setNavOpen(v => !v)} style={{ color: C.text }}>
-              {navOpen ? <X className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
+      <header className="fixed top-0 inset-x-0 z-40 backdrop-blur-md border-b h-14" style={{ background: "rgba(255,255,255,0.95)", borderColor: C.border }}>
+        <div className="max-w-[1400px] mx-auto px-6 h-full flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <button className="md:hidden p-2 rounded-lg" onClick={() => setMobileNavOpen(v => !v)} style={{ color: C.text }}>
+              {mobileNavOpen ? <X className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
             </button>
             <span className="font-bold text-lg" style={{ color: C.primary }}>Auton</span>
             <span className="hidden sm:inline text-xs font-semibold uppercase" style={{ letterSpacing: "0.18em", color: C.text3 }}>· Painel Interno</span>
           </div>
-          <Pill variant="success">v1.0 · validada</Pill>
-        </div>
 
-        <div className="border-t" style={{ borderColor: C.border }}>
-          <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
-            {TABS.map(t => {
-              const Icon = t.icon;
-              const isActive = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className="flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap relative"
-                  style={{ color: isActive ? C.primary : C.text2 }}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{t.label}</span>
-                  {isActive && <span className="absolute bottom-0 inset-x-0 h-0.5" style={{ background: C.primary }} />}
-                </button>
-              );
-            })}
-          </div>
+          {/* Busca global */}
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex-1 max-w-md flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors"
+            style={{ background: C.bg2, color: C.text3, border: `1px solid ${C.border}` }}
+          >
+            <Search className="w-4 h-4" />
+            <span className="flex-1 text-left">Buscar em todos os documentos...</span>
+            <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono" style={{ background: C.card, border: `1px solid ${C.border}`, color: C.text2 }}>
+              ⌘K
+            </kbd>
+          </button>
+
+          <Pill variant="success">v1.0 · validada</Pill>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 pt-32 pb-20 grid md:grid-cols-[240px_1fr] gap-10">
-        {/* SIDEBAR */}
-        <aside className={`${navOpen ? "block" : "hidden"} md:block`}>
-          <nav className="md:sticky md:top-32">
-            <p className="text-xs font-bold uppercase mb-4" style={{ letterSpacing: "0.2em", color: C.text3 }}>Navegação</p>
-            <ul className="space-y-1">
-              {sections.map(s => {
-                const isActive = active === s.id;
-                return (
-                  <li key={s.id}>
-                    <button
-                      onClick={() => goTo(s.id)}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg transition-all"
-                      style={{ background: isActive ? C.primarySoft : "transparent", color: isActive ? C.primary : C.text2 }}
+      {/* LAYOUT: sidebar grande sempre aberta + conteúdo */}
+      <div className="max-w-[1400px] mx-auto px-6 pt-20 pb-20 grid md:grid-cols-[300px_1fr] gap-10">
+        {/* SIDEBAR PERSISTENTE COM TODOS OS DOCS */}
+        <aside className={`${mobileNavOpen ? "block" : "hidden"} md:block`}>
+          <nav className="md:sticky md:top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
+            <div className="space-y-1 mb-4">
+              <p className="text-[10px] font-bold uppercase px-3" style={{ letterSpacing: "0.18em", color: C.text3 }}>
+                Atalhos
+              </p>
+              <div className="px-3 py-2 text-[11px] flex flex-wrap gap-x-3 gap-y-1" style={{ color: C.text3 }}>
+                <span><kbd className="px-1 rounded" style={{ background: C.bg2, border: `1px solid ${C.border}` }}>⌘K</kbd> busca</span>
+                <span><kbd className="px-1 rounded" style={{ background: C.bg2, border: `1px solid ${C.border}` }}>1-4</kbd> doc</span>
+                <span><kbd className="px-1 rounded" style={{ background: C.bg2, border: `1px solid ${C.border}` }}>J/K</kbd> seção</span>
+              </div>
+            </div>
+
+            {TABS.map(t => {
+              const isActiveTab = tab === t.id;
+              const tabSections = SECTIONS_BY_TAB[t.id] || [];
+              const Icon = t.icon;
+              return (
+                <div key={t.id} className="mb-4">
+                  <button
+                    onClick={() => setTab(t.id)}
+                    className="w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-lg transition-all mb-1"
+                    style={{
+                      background: isActiveTab ? C.primary : "transparent",
+                      color: isActiveTab ? "#FFFFFF" : C.text,
+                    }}
+                  >
+                    <span
+                      className="text-[11px] font-mono mt-0.5 shrink-0 px-1.5 py-0.5 rounded"
+                      style={{
+                        background: isActiveTab ? "rgba(255,255,255,0.2)" : C.primarySoft,
+                        color: isActiveTab ? "#FFFFFF" : C.primary,
+                      }}
                     >
-                      <span className="text-sm font-medium leading-tight flex-1" style={{ color: isActive ? C.primary : C.text }}>
-                        {s.label}
-                      </span>
-                      {isActive && <ChevronRight className="w-4 h-4" />}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-8 p-4 rounded-[14px] text-xs leading-relaxed" style={{ background: C.bg2, color: C.text2 }}>
+                      {t.num}
+                    </span>
+                    <Icon className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span className="text-sm font-bold leading-tight flex-1">{t.label}</span>
+                  </button>
+
+                  <ul className="space-y-0.5 ml-3">
+                    {tabSections.map(s => {
+                      const isActiveSection = isActiveTab && active === s.id;
+                      const isVisited = visited.has(s.id);
+                      return (
+                        <li key={s.id}>
+                          <button
+                            onClick={() => goToInTab(t.id, s.id)}
+                            className="w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-md transition-all"
+                            style={{
+                              background: isActiveSection ? C.primarySoft : "transparent",
+                              color: isActiveSection ? C.primary : C.text2,
+                              borderLeft: `2px solid ${isActiveSection ? C.primary : "transparent"}`,
+                              paddingLeft: 10,
+                            }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{
+                                background: isActiveSection
+                                  ? C.primary
+                                  : isVisited
+                                    ? C.text3
+                                    : "transparent",
+                                border: `1px solid ${isActiveSection ? C.primary : isVisited ? C.text3 : C.border}`,
+                              }}
+                            />
+                            <span className="text-[13px] leading-tight flex-1" style={{ color: isActiveSection ? C.primary : isVisited ? C.text2 : C.text3 }}>
+                              {s.label}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+
+            <div className="mt-6 p-3 rounded-[12px] text-[11px] leading-relaxed" style={{ background: C.bg2, color: C.text2 }}>
               <p className="font-semibold mb-1" style={{ color: C.primary }}>Fonte da verdade</p>
-              <p>Canvas Auton Atualizado v1.0 · abril/2026. Todos os números aqui foram validados nas 6 sessões de aplicação do Hormozi e cruzados com o estudo de mercado BR 2026.</p>
+              <p>Canvas Auton Atualizado v1.0 · abril/2026. Todos os números validados nas 6 sessões Hormozi e cruzados com o estudo de mercado BR 2026.</p>
             </div>
           </nav>
         </aside>
@@ -434,8 +593,73 @@ export default function PainelPage() {
         </main>
       </div>
 
+      {/* COMMAND PALETTE */}
+      {paletteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => { setPaletteOpen(false); setPaletteQuery(""); }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-[16px] overflow-hidden"
+            style={{ background: C.card, boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: C.border }}>
+              <Search className="w-5 h-5" style={{ color: C.text3 }} />
+              <input
+                autoFocus
+                type="text"
+                placeholder="Buscar seção em qualquer documento..."
+                value={paletteQuery}
+                onChange={e => setPaletteQuery(e.target.value)}
+                className="flex-1 outline-none text-base"
+                style={{ background: "transparent", color: C.text }}
+              />
+              <kbd className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ background: C.bg2, border: `1px solid ${C.border}`, color: C.text3 }}>
+                Esc
+              </kbd>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {paletteResults.length === 0 ? (
+                <p className="text-center py-12 text-sm" style={{ color: C.text3 }}>Nenhum resultado para "{paletteQuery}"</p>
+              ) : (
+                paletteResults.map((r, i) => (
+                  <button
+                    key={`${r.tab}-${r.id}`}
+                    onClick={() => goToInTab(r.tab, r.id)}
+                    className="w-full text-left flex items-center gap-3 px-4 py-3 transition-colors hover:bg-opacity-5"
+                    style={{
+                      background: i === 0 && paletteQuery ? C.primarySoft2 : "transparent",
+                      borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                    }}
+                  >
+                    <span
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0"
+                      style={{ background: C.primarySoft, color: C.primary }}
+                    >
+                      {r.tabNum}
+                    </span>
+                    <Hash className="w-4 h-4 shrink-0" style={{ color: C.text3 }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: C.text }}>{r.label}</p>
+                      <p className="text-xs" style={{ color: C.text3 }}>{r.tabLabel}</p>
+                    </div>
+                    <ArrowRightIcon className="w-4 h-4 shrink-0" style={{ color: C.text3 }} />
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="px-4 py-2 border-t flex items-center justify-between text-[11px]" style={{ borderColor: C.border, background: C.bg2, color: C.text3 }}>
+              <span>{paletteResults.length} de {FLAT_SECTIONS.length} seções</span>
+              <span><kbd className="px-1 rounded" style={{ background: C.card, border: `1px solid ${C.border}` }}>↵</kbd> ir</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="border-t py-6 px-6" style={{ background: C.card, borderColor: C.border }}>
-        <div className="max-w-7xl mx-auto text-xs" style={{ color: C.text3 }}>
+        <div className="max-w-[1400px] mx-auto text-xs" style={{ color: C.text3 }}>
           <p>Auton Health · Painel Interno · Uso restrito · Atualização: abril/2026 · 4 documentos integrados</p>
         </div>
       </footer>
