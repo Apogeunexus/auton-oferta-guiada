@@ -516,17 +516,17 @@ export default function PainelPage() {
               const tabSections = SECTIONS_BY_TAB[t.id] || [];
               const Icon = t.icon;
               return (
-                <div key={t.id} className="mb-4">
+                <div key={t.id} className={isActiveTab ? "mb-4" : "mb-1"}>
                   <button
                     onClick={() => setTab(t.id)}
-                    className="w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-lg transition-all mb-1"
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-1"
                     style={{
                       background: isActiveTab ? C.primary : "transparent",
                       color: isActiveTab ? "#FFFFFF" : C.text,
                     }}
                   >
                     <span
-                      className="text-[11px] font-mono mt-0.5 shrink-0 px-1.5 py-0.5 rounded"
+                      className="text-[11px] font-mono shrink-0 px-1.5 py-0.5 rounded"
                       style={{
                         background: isActiveTab ? "rgba(255,255,255,0.2)" : C.primarySoft,
                         color: isActiveTab ? "#FFFFFF" : C.primary,
@@ -534,10 +534,23 @@ export default function PainelPage() {
                     >
                       {t.num}
                     </span>
-                    <Icon className="w-4 h-4 mt-0.5 shrink-0" />
+                    <Icon className="w-4 h-4 shrink-0" />
                     <span className="text-sm font-bold leading-tight flex-1">{t.label}</span>
+                    {!isActiveTab && (
+                      <span className="text-[10px] shrink-0" style={{ color: C.text3 }}>
+                        {tabSections.length}
+                      </span>
+                    )}
+                    <ChevronRight
+                      className="w-4 h-4 shrink-0 transition-transform"
+                      style={{
+                        color: isActiveTab ? "rgba(255,255,255,0.85)" : C.text3,
+                        transform: isActiveTab ? "rotate(90deg)" : "rotate(0)",
+                      }}
+                    />
                   </button>
 
+                  {isActiveTab && (
                   <ul className="space-y-0.5 ml-3">
                     {tabSections.map(s => {
                       const isActiveSection = isActiveTab && active === s.id;
@@ -573,6 +586,7 @@ export default function PainelPage() {
                       );
                     })}
                   </ul>
+                  )}
                 </div>
               );
             })}
